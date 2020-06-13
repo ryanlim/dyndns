@@ -1,0 +1,10 @@
+{
+  "zone_master": "your.primary.dns.server",
+  "zone": "some.zone",
+  "alt_names": ["alias1", "alias2"],
+  "host":"yourdnsentry",
+  "keyfile": "/path/to/your/dyndns/key",
+  "has_bonjour": true,
+  "has_local": true,
+  "debug": false
+}

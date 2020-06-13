@@ -1,0 +1,4 @@
+key "example" {
+ algorithm hmac-md5;
+ secret "XXXXXXXXXXXXXXXXXXXXXXXX";
+};
