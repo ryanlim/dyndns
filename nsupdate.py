@@ -167,12 +167,15 @@ if config.get('debug', False):
 
 # This is a janky way to use nsupdate
 # At some point we should get this via a proper method.
-command = f"""/usr/bin/nsupdate -k {config['keyfile']} << EOF
-{zone_update}
-EOF
-"""
 
-process = subprocess.Popen(command, shell=True)
+command = ["/usr/bin/nsupdate", "-k", config['keyfile']]
+process = subprocess.Popen(
+    command,
+    stdout=subprocess.PIPE,
+    stdin=subprocess.PIPE,
+    stderr=subprocess.PIPE
+)
+process.communicate(input=zone_update.encode())
 
 try:
     fcntl.lockf(fp, fcntl.LOCK_UN)
