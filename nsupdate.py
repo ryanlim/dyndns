@@ -102,24 +102,15 @@ zone_update_commands.append(f"server {config['zone_master']}")
 ts_now = time.strftime("%Y-%m-%d %H:%M:%S %z")
 
 zone_update_commands += setOrUpdate(
-    f"{host}.{zone}",
-    60,
-    "TXT",
-    f"\"Updated: {ts_now}\""
+    f"{host}.{zone}", 60, "TXT", f"\"Updated: {ts_now}\""
 )
 
 zone_update_commands += setOrUpdate(
-    f"{host}.{zone}",
-    60,
-    "A",
-    ip4_address
+    f"{host}.{zone}", 60, "A", ip4_address
 )
 
 zone_update_commands += setOrUpdate(
-    f"{host}.{zone}",
-    60,
-    "AAAA",
-    ip6_address
+    f"{host}.{zone}", 60, "AAAA", ip6_address
 )
 
 zone_update_commands.append(f"update delete {host}-local.{zone} A")
@@ -145,17 +136,23 @@ if config.get('alt_names'):
 
     for alt in alt_names:
         zone_update_commands += setOrUpdate(
-            f"{alt}-txt.{zone}",
-            60,
-            "TXT",
-            f"\"Updated: {ts_now}\""
+            f"{alt}.{zone}", 60, "CNAME", None
         )
 
         zone_update_commands += setOrUpdate(
-            f"{alt}.{zone}",
-            60,
-            "CNAME",
-            f"{host}.{zone}"
+            f"{alt}-txt.{zone}", 60, "TXT", None
+        )
+
+        zone_update_commands += setOrUpdate(
+            f"{alt}.{zone}", 60, "TXT", f"\"Updated: {ts_now}\""
+        )
+        
+        zone_update_commands += setOrUpdate(
+            f"{alt}.{zone}", 60, "A", ip4_address
+        )
+        
+        zone_update_commands += setOrUpdate(
+            f"{alt}.{zone}", 60, "AAAA", ip6_address
         )
 
 
