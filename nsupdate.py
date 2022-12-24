@@ -8,7 +8,7 @@ import time
 import os
 
 import fcntl
-PID_FILE = f"/tmp/nsupdate-{os.environ['USER']}.pid"
+PID_FILE = f"/tmp/nsupdate-{os.environ['LOGNAME']}.pid"
 fp = open(PID_FILE, 'w')
 try:
     fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
