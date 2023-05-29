@@ -6,38 +6,17 @@ import subprocess
 import sys
 import time
 import os
-
+import pprint
 import fcntl
-PID_FILE = f"/tmp/nsupdate-{os.environ['LOGNAME']}.pid"
-fp = open(PID_FILE, 'w')
-try:
-    fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except IOError:
-    # another instance is running
-    print("Another instance is running.")
-    sys.exit(1)
 
+import dns.tsigkeyring
+import dns.update
+import dns.query
+import dns.resolver
+import dns.inet
 
-try:
-    with open('config.json', 'r') as f:
-        config = json.load(f)
-except Exception:
-    print("config.json not found.")
-    sys.exit(1)
+PID_FILE = f"/tmp/nsupdate-{os.environ['USER']}.pid"
 
-min_config=('zone', 'zone_master', 'host', 'keyfile')
-for c in min_config:
-    if c not in list(config.keys()):
-        print(("Missing %s option in the config file." % (c,)))
-        sys.exit(1)
-
-if config.get('debug', False):
-    import pprint
-    print("Config:")
-    pprint.pprint(config, indent=4)
-
-zone = config['zone']
-host = config['host']
 
 def getPublicIP(addr_type='4'):
     if addr_type == '4':
@@ -63,6 +42,7 @@ def getPublicIP(addr_type='4'):
     ip_address = res_json['ip_candidates'][0]['ip']
     return ip_address
 
+
 # This is a janky way to get the IP address.
 # At some point we should get this via a proper method
 def getBonjourIP():
@@ -70,6 +50,7 @@ def getBonjourIP():
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
     ip_bonjour = process.communicate()[0].rstrip().decode('utf-8')
     return ip_bonjour
+
 
 # This is a janky way to get the IP address.
 # At some point we should get this via a proper method
@@ -84,101 +65,107 @@ def getLocalIP():
     return ip
 
 
-ip4_address = getPublicIP('4')
-ip6_address = getPublicIP('6')
+def getConfig():
+    try:
+        with open('config.json', 'r') as f:
+            config = json.load(f)
+    except Exception:
+        print("config.json not found or invalid json file.")
+        sys.exit(1)
+    
+    min_config=('zone', 'zone_master', 'host', 'keyfile', 'tsigkeyring')
+    for c in min_config:
+        if c not in list(config.keys()):
+            print(("Missing %s option in the config file." % (c,)))
+            sys.exit(1)
+        if c == "tsigkeyring":
+            tsigkeyring_keys = ('name', 'secret')
+            for c_ in tsigkeyring_keys:
+                if c_ not in list(config[c].keys()):
+                    print(("Missing %s option in the config file (tsigkeyring section)." % (c_,)))
+                    sys.exit(1)
 
-def setOrUpdate(host, ttl, rtype, data):
-    ret = []
-    ret.append(f"update delete {host} {rtype}")
-    if data is not None:
-        ret.append(f"update add {host} {ttl} {rtype} {data}")
-    ret.append("send")
-    return ret
-
-zone_update_commands = []
-zone_update_commands.append(f"zone {zone}")
-zone_update_commands.append(f"server {config['zone_master']}")
-
-ts_now = time.strftime("%Y-%m-%d %H:%M:%S %z")
-
-zone_update_commands += setOrUpdate(
-    f"{host}.{zone}", 60, "TXT", f"\"Updated: {ts_now}\""
-)
-
-zone_update_commands += setOrUpdate(
-    f"{host}.{zone}", 60, "A", ip4_address
-)
-
-zone_update_commands += setOrUpdate(
-    f"{host}.{zone}", 60, "AAAA", ip6_address
-)
-
-zone_update_commands.append(f"update delete {host}-local.{zone} A")
-if config.get('has_local', False):
-    ip_local = getLocalIP()
-    if ip_local != None and ip_local != "":
-        zone_update_commands.append(
-            f"update add {host}-local.{zone} 60 A {ip_local}"
-        )
-zone_update_commands.append("send")
-
-zone_update_commands.append(f"update delete {host}-wa.{zone} AAAA")
-if config.get('has_bonjour', False):
-    ip_bonjour = getBonjourIP()
-    if ip_bonjour != None and ip_bonjour != "":
-        zone_update_commands.append(
-            f"update add {host}-wa.{zone} 60 AAAA {ip_bonjour}"
-        )
-zone_update_commands.append("send")
-
-if config.get('alt_names'):
-    alt_names = config.get('alt_names', [])
-
-    for alt in alt_names:
-        zone_update_commands += setOrUpdate(
-            f"{alt}.{zone}", 60, "CNAME", None
-        )
-
-        zone_update_commands += setOrUpdate(
-            f"{alt}-txt.{zone}", 60, "TXT", None
-        )
-
-        zone_update_commands += setOrUpdate(
-            f"{alt}.{zone}", 60, "TXT", f"\"Updated: {ts_now}\""
-        )
-        
-        zone_update_commands += setOrUpdate(
-            f"{alt}.{zone}", 60, "A", ip4_address
-        )
-        
-        zone_update_commands += setOrUpdate(
-            f"{alt}.{zone}", 60, "AAAA", ip6_address
-        )
+    return config
 
 
-zone_update = "\n".join(zone_update_commands)
+if __name__ == "__main__":
+    fp = open(PID_FILE, 'w')
+    try:
+        fcntl.lockf(fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        # another instance is running
+        print("Another instance is running.")
+        sys.exit(1)
 
-if config.get('debug', False):
-    print("Sending nsupdate data:")
-    print(zone_update)
+    config = getConfig()
+    
+    if config.get('debug', False):
+        print("Config:")
+        pprint.pprint(config, indent=4)
+    
+    zone = config.get('zone')
+    host = config.get('host')
+    tsigkeyring = config.get('tsigkeyring', {})
+    
+    ip4_address = getPublicIP('4')
+    ip6_address = getPublicIP('6')
 
-# This is a janky way to use nsupdate
-# At some point we should get this via a proper method.
+    ts_now = time.strftime("%Y-%m-%d %H:%M:%S %z")
 
-command = ["/usr/bin/nsupdate", "-k", config['keyfile']]
-process = subprocess.Popen(
-    command,
-    stdout=subprocess.PIPE,
-    stdin=subprocess.PIPE,
-    stderr=subprocess.PIPE
-)
-process.communicate(input=zone_update.encode())
+    keyring = dns.tsigkeyring.from_text({
+        tsigkeyring["name"] : tsigkeyring["secret"]
+    })
+    
+    updater = dns.update.UpdateMessage(zone, keyring=keyring)
 
-try:
-    fcntl.lockf(fp, fcntl.LOCK_UN)
-except IOError:
-    # another instance is running
-    print("Failed to unlock.")
-    sys.exit(1)
+    zone_master = ""
+    if dns.inet.is_address(config['zone_master']):
+        zone_master = config['zone_master']
+    else:
+        zone_master = str(dns.resolver.resolve(config['zone_master'], 'A')[0])
 
-os.unlink(PID_FILE)
+    updater.delete(host, "TXT")
+    updater.add(host, 60, "TXT", f"\"Updated on: {ts_now}\"")
+
+    updater.delete(host, "A")
+    updater.add(host, 60, "A", ip4_address)
+
+    updater.delete(host, "AAAA")
+    if ip6_address:
+        updater.add(host, 60, "AAAA", ip6_address)
+
+    updater.delete(f"{host}-local", "A")
+    if config.get('has_local', False):
+        ip_local = getLocalIP()
+        if ip_local != None and ip_local != "":
+            updater.add(f"{host}-local", 60, "A", ip_local)
+
+    updater.delete(f"{host}-wa", "AAAA")
+    if config.get('has_bonjour', False):
+        ip_bonjour = getBonjourIP()
+        if ip_bonjour != None and ip_bonjour != "":
+            updater.add(f"{host}-wa", 60, "AAAA", ip_bonjour)
+
+    if config.get('alt_names'):
+        alt_names = config.get('alt_names', [])
+    
+        for alt in alt_names:
+            updater.delete(f"{alt}-txt", "TXT")
+            updater.add(f"{alt}-txt", 60, "TXT", f"\"Updated: {ts_now}\"")
+            updater.delete(f"{alt}", "CNAME")
+            updater.add(f"{alt}", 60, "CNAME", f"{host}.{zone}")
+
+    if config.get('debug', False):
+        print("Changes:")
+        pprint.pprint(updater.sections)
+
+    response = dns.query.tcp(updater, zone_master)
+    
+    try:
+        fcntl.lockf(fp, fcntl.LOCK_UN)
+    except IOError:
+        # another instance is running
+        print("Failed to unlock.")
+        sys.exit(1)
+    
+    os.unlink(PID_FILE)
