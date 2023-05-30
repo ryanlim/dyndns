@@ -15,8 +15,8 @@ The config file is just a JSON file named config.json.
 | `zone_master` | string | The primary DNS server you will be sending the update to. |
 | `zone` | string | The zone name you will be updating. |
 | `host` | string | The primary record name to set or update. |
-| `alt_names` | array | (Optional) list of other names you want to be associated with. |
 | `tsigkeyring` | dict | Required fields are `name` and `secret` matching the host key and secret. |
+| `alt_names` | array | (Optional) list of other names you want to be associated with. |
 | `has_bonjour` | boolean | (Optional, default: `false`) Update the bonjour host entry. |
 | `has_local` | boolean | (Optional, default: `false`) Update the local host entry. This is typically the $hostname-local address. |
 | `debug` | boolean | (Optional, default: `false`) Set to `true` to see what gets passed to nsupdate. |
