@@ -75,13 +75,13 @@ def getConfig(config_path):
         print(f"{config_path} not found or invalid json file.")
         sys.exit(1)
     
-    min_config=('zone', 'zone_master', 'host', 'keyfile', 'tsigkeyring')
+    min_config=('zone', 'zone_master', 'host', 'tsigkeyring')
     for c in min_config:
         if c not in list(config.keys()):
             print(("Missing %s option in the config file." % (c,)))
             sys.exit(1)
         if c == "tsigkeyring":
-            tsigkeyring_keys = ('name', 'secret')
+            tsigkeyring_keys = ('name', 'secret', 'keyalgorithm')
             for c_ in tsigkeyring_keys:
                 if c_ not in list(config[c].keys()):
                     print(("Missing %s option in the config file (tsigkeyring section)." % (c_,)))
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     
     if config.get('debug', False):
         print("Config:")
-        config_ = copy.copy(config)
+        config_ = copy.deepcopy(config)
         if config_.get('tsigkeyring'):
             if config['tsigkeyring'].get('secret', None):
                 config_['tsigkeyring']['secret'] = "redacted"
@@ -131,8 +131,19 @@ if __name__ == "__main__":
     keyring = dns.tsigkeyring.from_text({
         tsigkeyring["name"] : tsigkeyring["secret"]
     })
+
+    keyalgorithm = dns.tsig.default_algorithm
+    if tsigkeyring["keyalgorithm"] == "hmac-sha256":
+        keyalgorithm = dns.tsig.HMAC_SHA256
+    elif tsigkeyring["keyalgorithm"] == "hmac-sha512":
+        keyalgorithm = dns.tsig.HMAC_SHA512
+    elif tsigkeyring["keyalgorithm"] == "hmac-md5":
+        keyalgorithm = dns.tsig.HMAC_MD5
     
-    updater = dns.update.UpdateMessage(zone, keyring=keyring)
+    updater = dns.update.UpdateMessage(zone,
+                                       keyring=keyring,
+                                       keyname=tsigkeyring["name"],
+                                       keyalgorithm=keyalgorithm)
 
     zone_master = ""
     if dns.inet.is_address(config['zone_master']):
@@ -176,6 +187,10 @@ if __name__ == "__main__":
         pprint.pprint(updater.sections)
 
     response = dns.query.tcp(updater, zone_master)
+
+    if config.get('debug', False):
+        print("Result:")
+        print(response)
     
     try:
         fcntl.lockf(fp, fcntl.LOCK_UN)
