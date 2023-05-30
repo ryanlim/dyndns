@@ -8,6 +8,7 @@ import time
 import os
 import pprint
 import fcntl
+import argparse
 
 import dns.tsigkeyring
 import dns.update
@@ -65,12 +66,12 @@ def getLocalIP():
     return ip
 
 
-def getConfig():
+def getConfig(config_path):
     try:
-        with open('config.json', 'r') as f:
+        with open(config_path, 'r') as f:
             config = json.load(f)
     except Exception:
-        print("config.json not found or invalid json file.")
+        print(f"{config_path} not found or invalid json file.")
         sys.exit(1)
     
     min_config=('zone', 'zone_master', 'host', 'keyfile', 'tsigkeyring')
@@ -97,7 +98,16 @@ if __name__ == "__main__":
         print("Another instance is running.")
         sys.exit(1)
 
-    config = getConfig()
+    parser = argparse.ArgumentParser(
+        prog='nsupdate',
+        description='Updates a rfc2136 dynamic DNS record.'
+    )
+    parser.add_argument('config_path',
+                        help='Path to config.json file.')
+
+    args = parser.parse_args()
+    config_path = args.config_path
+    config = getConfig(config_path)
     
     if config.get('debug', False):
         print("Config:")
