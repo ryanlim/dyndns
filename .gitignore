@@ -1,2 +1,5 @@
 config.json
 key
+build
+dist
+nsupdate.spec
