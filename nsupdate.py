@@ -9,6 +9,7 @@ import os
 import pprint
 import fcntl
 import argparse
+import copy
 
 import dns.tsigkeyring
 import dns.update
@@ -111,7 +112,12 @@ if __name__ == "__main__":
     
     if config.get('debug', False):
         print("Config:")
-        pprint.pprint(config, indent=4)
+        config_ = copy.copy(config)
+        if config_.get('tsigkeyring'):
+            if config['tsigkeyring'].get('secret', None):
+                config_['tsigkeyring']['secret'] = "redacted"
+
+        pprint.pprint(config_, indent=4)
     
     zone = config.get('zone')
     host = config.get('host')
