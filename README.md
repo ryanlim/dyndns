@@ -20,6 +20,7 @@ The config file is just a JSON file named config.json.
 | `has_bonjour` | boolean | (Optional, default: `false`) Update the bonjour host entry. |
 | `has_local` | boolean | (Optional, default: `false`) Update the local host entry. This is typically the $hostname-local address. |
 | `debug` | boolean | (Optional, default: `false`) Set to `true` to see what gets passed to nsupdate. |
+| `urllib_timeout` | int | (Optional, default: `10`) Set the urllib request timeout in seconds. |
 
 ## Usage
 ```

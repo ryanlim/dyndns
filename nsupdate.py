@@ -22,7 +22,7 @@ PID_FILE = f"/tmp/nsupdate-{os.environ['USER']}.pid"
 URLLIB_TIMEOUT = 10
 
 
-def getPublicIP(addr_type='4'):
+def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
     if addr_type == '4':
         endpoint = 'https://ip.limau.net?format=json'
     elif addr_type == '6':
@@ -33,9 +33,11 @@ def getPublicIP(addr_type='4'):
     req = urllib.request.Request(endpoint)
     req.add_header('User-agent', 'nsupdate')
     try:
-        res = urllib.request.urlopen(req, None, URLLIB_TIMEOUT)
+        res = urllib.request.urlopen(req, None, timeout)
     except urllib.error.URLError as e:
         #print "Cannot obtain public IP v%s address: %s" % (addr_type, e)
+        return None
+    except Exception as e:
         return None
 
     if res == None:
@@ -125,12 +127,10 @@ if __name__ == "__main__":
     host = config.get('host')
     tsigkeyring = config.get('tsigkeyring', {})
     
-    ip4_address = getPublicIP('4')
-    if not ip4_address:
-        print("Failed to obtain IPv4 address.")
-        sys.exit(1)
-
-    ip6_address = getPublicIP('6')
+    ip4_address = getPublicIP('4', config.get('urllib_timeout', URLLIB_TIMEOUT))
+    print(f"IPv4: {ip4_address}")
+    ip6_address = getPublicIP('6', config.get('urllib_timeout', URLLIB_TIMEOUT))
+    print(f"IPv6: {ip6_address}")
 
     ts_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
 
@@ -161,7 +161,8 @@ if __name__ == "__main__":
     updater.add(host, 60, "TXT", f"\"Updated on: {ts_now}\"")
 
     updater.delete(host, "A")
-    updater.add(host, 60, "A", ip4_address)
+    if ip4_address:
+        updater.add(host, 60, "A", ip4_address)
 
     updater.delete(host, "AAAA")
     if ip6_address:
