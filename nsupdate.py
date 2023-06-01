@@ -180,7 +180,7 @@ if __name__ == "__main__":
             updater.delete(f"{alt}-txt", "TXT")
             updater.add(f"{alt}-txt", 60, "TXT", f"\"Updated: {ts_now}\"")
             updater.delete(f"{alt}", "CNAME")
-            updater.add(f"{alt}", 60, "CNAME", f"{host}.{zone}")
+            updater.add(f"{alt}", 60, "CNAME", f"{host}.{zone}.")
 
     if config.get('debug', False):
         print("Changes:")
