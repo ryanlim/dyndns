@@ -17,7 +17,8 @@ import dns.query
 import dns.resolver
 import dns.inet
 
-PID_FILE = f"/tmp/nsupdate-{os.environ['USER']}.pid"
+USER = os.environ.get('USER', os.environ.get('LOGNAME', 'undefined_user'))
+PID_FILE = f"/tmp/nsupdate-{USER}.pid"
 
 URLLIB_TIMEOUT = 10
 
