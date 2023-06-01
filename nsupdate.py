@@ -4,7 +4,7 @@ import urllib.request, urllib.error, urllib.parse
 import json
 import subprocess
 import sys
-import time
+from datetime import datetime, timezone
 import os
 import pprint
 import fcntl
@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     ip6_address = getPublicIP('6')
 
-    ts_now = time.strftime("%Y-%m-%d %H:%M:%S %z")
+    ts_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
 
     keyring = dns.tsigkeyring.from_text({
         tsigkeyring["name"] : tsigkeyring["secret"]
