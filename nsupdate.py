@@ -19,6 +19,8 @@ import dns.inet
 
 PID_FILE = f"/tmp/nsupdate-{os.environ['USER']}.pid"
 
+URLLIB_TIMEOUT = 10
+
 
 def getPublicIP(addr_type='4'):
     if addr_type == '4':
@@ -31,7 +33,7 @@ def getPublicIP(addr_type='4'):
     req = urllib.request.Request(endpoint)
     req.add_header('User-agent', 'nsupdate')
     try:
-        res = urllib.request.urlopen(req)
+        res = urllib.request.urlopen(req, None, URLLIB_TIMEOUT)
     except urllib.error.URLError as e:
         #print "Cannot obtain public IP v%s address: %s" % (addr_type, e)
         return None
@@ -124,6 +126,10 @@ if __name__ == "__main__":
     tsigkeyring = config.get('tsigkeyring', {})
     
     ip4_address = getPublicIP('4')
+    if not ip4_address:
+        print("Failed to obtain IPv4 address.")
+        sys.exit(1)
+
     ip6_address = getPublicIP('6')
 
     ts_now = time.strftime("%Y-%m-%d %H:%M:%S %z")
