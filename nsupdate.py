@@ -17,6 +17,8 @@ import dns.query
 import dns.resolver
 import dns.inet
 
+import netifaces
+
 USER = os.environ.get('USER', os.environ.get('LOGNAME', 'undefined_user'))
 PID_FILE = f"/tmp/nsupdate-{USER}.pid"
 
@@ -50,25 +52,17 @@ def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
     return ip_address
 
 
-# This is a janky way to get the IP address.
-# At some point we should get this via a proper method
 def getBonjourIP():
-    command = """/sbin/ifconfig utun0 | grep inet6 | grep "scopeid" | grep "prefixlen 64" | awk '{ print $2 }' | cut -f 1 -d %"""
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-    ip_bonjour = process.communicate()[0].rstrip().decode('utf-8')
+    bonjour_interface = netifaces.ifaddresses('utun0')
+    ip_bonjour = bonjour_interface[netifaces.AF_INET6][0]['addr'].split('%')[0]
+
     return ip_bonjour
 
 
-# This is a janky way to get the IP address.
-# At some point we should get this via a proper method
 def getLocalIP():
-    command = (
-        "/usr/sbin/ipconfig getifaddr "
-        "$(/usr/sbin/netstat -nr | grep default | "
-        "grep UGSc | awk '{ print $NF }')"
-    )
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-    ip = process.communicate()[0].rstrip().decode('utf-8')
+    default_iface = netifaces.gateways()['default'][netifaces.AF_INET][1]
+    ip = netifaces.ifaddresses(default_iface)[netifaces.AF_INET][0]['addr']
+
     return ip
 
 
