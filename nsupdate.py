@@ -123,10 +123,11 @@ if __name__ == "__main__":
     tsigkeyring = config.get('tsigkeyring', {})
     
     ip4_address = getPublicIP('4', config.get('urllib_timeout', URLLIB_TIMEOUT))
-    ip6_address = getPublicIP('6', config.get('urllib_timeout', URLLIB_TIMEOUT))
-
     if config.get('debug', False):
         print(f"IPv4: {ip4_address}")
+
+    ip6_address = getPublicIP('6', config.get('urllib_timeout', URLLIB_TIMEOUT))
+    if config.get('debug', False):
         print(f"IPv6: {ip6_address}")
 
     ts_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
