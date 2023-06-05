@@ -23,6 +23,7 @@ USER = os.environ.get('USER', os.environ.get('LOGNAME', 'undefined_user'))
 PID_FILE = f"/tmp/nsupdate-{USER}.pid"
 
 URLLIB_TIMEOUT = 10
+DNSPYTHON_TIMEOUT = 10
 
 
 def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
@@ -191,7 +192,11 @@ if __name__ == "__main__":
         print("Changes:")
         pprint.pprint(updater.sections)
 
-    response = dns.query.tcp(updater, zone_master)
+    response = dns.query.tcp(
+        updater,
+        zone_master,
+        config.get('dnspython_timeout', DNSPYTHON_TIMEOUT)
+    )
 
     if config.get('debug', False):
         print("Result:")
