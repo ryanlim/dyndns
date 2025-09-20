@@ -11,6 +11,11 @@ import fcntl
 import argparse
 import copy
 
+import socket
+import fcntl
+import struct
+import ipaddress
+
 import dns.tsigkeyring
 import dns.update
 import dns.query
@@ -18,6 +23,7 @@ import dns.resolver
 import dns.inet
 
 import netifaces
+
 
 USER = os.environ.get('USER', os.environ.get('LOGNAME', 'undefined_user'))
 PID_FILE = f"/tmp/nsupdate-{USER}.pid"
@@ -55,16 +61,39 @@ def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
 
 def getBonjourIP():
     bonjour_interface = netifaces.ifaddresses('utun0')
-    ip_bonjour = bonjour_interface[netifaces.AF_INET6][0]['addr'].split('%')[0]
+    ip_bonjour = bonjour_interface[netifaces.InterfaceType.AF_INET6][0]['addr'].split('%')[0]
 
     return ip_bonjour
 
 
 def getLocalIP():
-    default_iface = netifaces.gateways()['default'][netifaces.AF_INET][1]
-    ip = netifaces.ifaddresses(default_iface)[netifaces.AF_INET][0]['addr']
+    default_iface = netifaces.default_gateway()[netifaces.InterfaceType.AF_INET][1]
+    ip = netifaces.ifaddresses(default_iface)[netifaces.InterfaceType.AF_INET][0]['addr']
 
     return ip
+
+def getHwAddr(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', bytes(ifname, 'utf-8')[:15]))
+    return ':'.join('%02x' % b for b in info[18:24])
+
+def getSLAACIPv6Addr():
+    default_iface = netifaces.default_gateway()[netifaces.InterfaceType.AF_INET6][1]
+    links = netifaces.ifaddresses(default_iface)[netifaces.InterfaceType.AF_INET6]
+
+    mac_addr = getHwAddr(default_iface)
+    global_stable_ipv6 = ""
+
+    for link in links:
+        m_ = mac_addr.split(":")
+        part_ipv6_addr = f"{m_[3]}:{m_[4]}{m_[5]}"
+
+        if 'addr' in link and \
+                part_ipv6_addr in link['addr'] and \
+                ipaddress.ip_address(link['addr']).is_global:
+            return link['addr']
+
+    return None
 
 
 def getConfig(config_path):
@@ -127,7 +156,18 @@ if __name__ == "__main__":
     if config.get('debug', False):
         print(f"IPv4: {ip4_address}")
 
-    ip6_address = getPublicIP('6', config.get('urllib_timeout', URLLIB_TIMEOUT))
+    ip6_address = None
+
+    if config.get('use_ipv6_slaac', False):
+        ip6_address = getSLAACIPv6Addr()
+        if config.get('debug', False):
+            print(f"IPv6 (SLAAC): {ip6_address}")
+
+        if not ip6_address:
+            ip6_address = getPublicIP('6', config.get('urllib_timeout', URLLIB_TIMEOUT))
+    else:
+        ip6_address = getPublicIP('6', config.get('urllib_timeout', URLLIB_TIMEOUT))
+
     if config.get('debug', False):
         print(f"IPv6: {ip6_address}")
 

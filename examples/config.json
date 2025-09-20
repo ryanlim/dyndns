@@ -3,8 +3,13 @@
   "zone": "some.zone",
   "alt_names": ["alias1", "alias2"],
   "host":"yourdnsentry",
-  "keyfile": "/path/to/your/dyndns/key",
+  "tsigkeyring": {
+    "name": "key_name",
+    "secret": "* secret *",
+    "keyalgorithm": "hmac-sha512"
+  },
   "has_bonjour": true,
   "has_local": true,
+  "use_ipv6_slaac": false,
   "debug": false
 }

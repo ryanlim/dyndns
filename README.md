@@ -22,6 +22,7 @@ The config file is just a JSON file named config.json.
 | `debug` | boolean | (Optional, default: `false`) Set to `true` to see what gets passed to nsupdate. |
 | `urllib_timeout` | int | (Optional, default: `10`) Set the urllib request timeout in seconds. |
 | `dnspython_timeout` | int | (Optional, default: `10`) Set the dnspython request timeout in seconds. |
+| `use_ipv6_slaac` | boolean | (Optional, default: `false`) For IPv6 addresses, try to use the stable SLAAC address instead of the public, privacy based address. |
 
 ## Usage
 ```
