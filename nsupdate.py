@@ -50,7 +50,7 @@ def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
     except Exception as e:
         return None
 
-    if res == None:
+    if res is None:
         #print "Cannot obtain public IP v%s address: %s" % (addr_type, e)
         return None
 
