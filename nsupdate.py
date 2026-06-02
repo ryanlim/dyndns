@@ -55,8 +55,10 @@ def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
         return None
 
     res_json = json.loads(res.read())
-    ip_address = res_json['ip_candidates'][0]['ip']
-    return ip_address
+    candidates = res_json.get('ip_candidates', [])
+    if not candidates:
+        return None
+    return candidates[0]['ip']
 
 
 def getBonjourIP():
