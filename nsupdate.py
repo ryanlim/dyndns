@@ -62,17 +62,21 @@ def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
 
 
 def getBonjourIP():
-    bonjour_interface = netifaces.ifaddresses('utun0')
-    ip_bonjour = bonjour_interface[netifaces.InterfaceType.AF_INET6][0]['addr'].split('%')[0]
-
-    return ip_bonjour
+    try:
+        bonjour_interface = netifaces.ifaddresses('utun0')
+        ip_bonjour = bonjour_interface[netifaces.InterfaceType.AF_INET6][0]['addr'].split('%')[0]
+        return ip_bonjour
+    except (KeyError, IndexError):
+        return None
 
 
 def getLocalIP():
-    default_iface = netifaces.default_gateway()[netifaces.InterfaceType.AF_INET][1]
-    ip = netifaces.ifaddresses(default_iface)[netifaces.InterfaceType.AF_INET][0]['addr']
-
-    return ip
+    try:
+        default_iface = netifaces.default_gateway()[netifaces.InterfaceType.AF_INET][1]
+        ip = netifaces.ifaddresses(default_iface)[netifaces.InterfaceType.AF_INET][0]['addr']
+        return ip
+    except (KeyError, IndexError):
+        return None
 
 def getHwAddr(ifname):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
