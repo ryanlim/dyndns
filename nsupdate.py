@@ -247,7 +247,11 @@ if __name__ == "__main__":
     if config.get('debug', False):
         print("Result:")
         print(response)
-    
+
+    if response.rcode() != dns.rcode.NOERROR:
+        print(f"DNS update failed: {dns.rcode.to_text(response.rcode())}")
+        sys.exit(1)
+
     try:
         fcntl.lockf(fp, fcntl.LOCK_UN)
     except IOError:
