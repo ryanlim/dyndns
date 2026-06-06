@@ -79,21 +79,21 @@ def getLocalIP():
         return None
 
 def getSLAACIPv6Addr():
-    try:
-        for iface in netifaces.interfaces():
+    for iface in netifaces.interfaces():
+        try:
             addrs = netifaces.ifaddresses(iface)
             if netifaces.AF_LINK not in addrs or netifaces.AF_INET6 not in addrs:
                 continue
-            mac = addrs[netifaces.AF_LINK][0]['addr'].split(':')
+            mac = addrs[netifaces.AF_LINK][0]['addr'].lower().split(':')
             if len(mac) != 6:
                 continue
             part = f"{mac[3]}:{mac[4]}{mac[5]}"
             for link in addrs[netifaces.AF_INET6]:
-                addr = link.get('addr', '')
+                addr = link.get('addr', '').split('%')[0]
                 if part in addr and ipaddress.ip_address(addr).is_global:
                     return addr
-    except Exception:
-        return None
+        except Exception:
+            continue
     return None
 
 
