@@ -11,6 +11,7 @@ import fcntl
 import argparse
 import copy
 
+import socket
 import ipaddress
 
 import dns.tsigkeyring
@@ -69,29 +70,30 @@ def getBonjourIP():
 
 def getLocalIP():
     try:
-        default_iface = netifaces.gateways()['default'][netifaces.AF_INET][1]
-        ip = netifaces.ifaddresses(default_iface)[netifaces.AF_INET][0]['addr']
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        ip = s.getsockname()[0]
+        s.close()
         return ip
-    except (KeyError, IndexError):
+    except Exception:
         return None
 
 def getSLAACIPv6Addr():
     try:
-        default_iface = netifaces.gateways()['default'][netifaces.AF_INET6][1]
-        links = netifaces.ifaddresses(default_iface)[netifaces.AF_INET6]
-        mac_addr = netifaces.ifaddresses(default_iface)[netifaces.AF_LINK][0]['addr']
-    except (KeyError, IndexError):
+        for iface in netifaces.interfaces():
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_LINK not in addrs or netifaces.AF_INET6 not in addrs:
+                continue
+            mac = addrs[netifaces.AF_LINK][0]['addr'].split(':')
+            if len(mac) != 6:
+                continue
+            part = f"{mac[3]}:{mac[4]}{mac[5]}"
+            for link in addrs[netifaces.AF_INET6]:
+                addr = link.get('addr', '')
+                if part in addr and ipaddress.ip_address(addr).is_global:
+                    return addr
+    except Exception:
         return None
-
-    for link in links:
-        m_ = mac_addr.split(":")
-        part_ipv6_addr = f"{m_[3]}:{m_[4]}{m_[5]}"
-
-        if 'addr' in link and \
-                part_ipv6_addr in link['addr'] and \
-                ipaddress.ip_address(link['addr']).is_global:
-            return link['addr']
-
     return None
 
 
