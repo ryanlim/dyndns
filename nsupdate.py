@@ -64,7 +64,7 @@ def getPublicIP(addr_type='4', timeout=URLLIB_TIMEOUT):
 def getBonjourIP():
     try:
         bonjour_interface = netifaces.ifaddresses('utun0')
-        ip_bonjour = bonjour_interface[netifaces.InterfaceType.AF_INET6][0]['addr'].split('%')[0]
+        ip_bonjour = bonjour_interface[netifaces.AF_INET6][0]['addr'].split('%')[0]
         return ip_bonjour
     except (KeyError, IndexError):
         return None
@@ -72,8 +72,8 @@ def getBonjourIP():
 
 def getLocalIP():
     try:
-        default_iface = netifaces.default_gateway()[netifaces.InterfaceType.AF_INET][1]
-        ip = netifaces.ifaddresses(default_iface)[netifaces.InterfaceType.AF_INET][0]['addr']
+        default_iface = netifaces.gateways()['default'][netifaces.AF_INET][1]
+        ip = netifaces.ifaddresses(default_iface)[netifaces.AF_INET][0]['addr']
         return ip
     except (KeyError, IndexError):
         return None
@@ -84,8 +84,8 @@ def getHwAddr(ifname):
     return ':'.join('%02x' % b for b in info[18:24])
 
 def getSLAACIPv6Addr():
-    default_iface = netifaces.default_gateway()[netifaces.InterfaceType.AF_INET6][1]
-    links = netifaces.ifaddresses(default_iface)[netifaces.InterfaceType.AF_INET6]
+    default_iface = netifaces.gateways()['default'][netifaces.AF_INET6][1]
+    links = netifaces.ifaddresses(default_iface)[netifaces.AF_INET6]
 
     mac_addr = getHwAddr(default_iface)
     global_stable_ipv6 = ""
