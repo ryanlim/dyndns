@@ -11,9 +11,6 @@ import fcntl
 import argparse
 import copy
 
-import socket
-import fcntl
-import struct
 import ipaddress
 
 import dns.tsigkeyring
@@ -78,17 +75,13 @@ def getLocalIP():
     except (KeyError, IndexError):
         return None
 
-def getHwAddr(ifname):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', bytes(ifname, 'utf-8')[:15]))
-    return ':'.join('%02x' % b for b in info[18:24])
-
 def getSLAACIPv6Addr():
-    default_iface = netifaces.gateways()['default'][netifaces.AF_INET6][1]
-    links = netifaces.ifaddresses(default_iface)[netifaces.AF_INET6]
-
-    mac_addr = getHwAddr(default_iface)
-    global_stable_ipv6 = ""
+    try:
+        default_iface = netifaces.gateways()['default'][netifaces.AF_INET6][1]
+        links = netifaces.ifaddresses(default_iface)[netifaces.AF_INET6]
+        mac_addr = netifaces.ifaddresses(default_iface)[netifaces.AF_LINK][0]['addr']
+    except (KeyError, IndexError):
+        return None
 
     for link in links:
         m_ = mac_addr.split(":")
