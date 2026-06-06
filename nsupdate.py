@@ -252,12 +252,19 @@ if __name__ == "__main__":
             if config.get('debug', False):
                 print("Operations:")
                 pprint.pprint(ops)
-            results = sendHttpUpdate(
-                ops,
-                config['endpoint'],
-                config['bearer_token'],
-                config.get('urllib_timeout', URLLIB_TIMEOUT)
-            )
+            try:
+                results = sendHttpUpdate(
+                    ops,
+                    config['endpoint'],
+                    config['bearer_token'],
+                    config.get('urllib_timeout', URLLIB_TIMEOUT)
+                )
+            except urllib.error.HTTPError as e:
+                print(f"HTTP error {e.code}: {e.reason}")
+                sys.exit(1)
+            except urllib.error.URLError as e:
+                print(f"Connection error: {e.reason}")
+                sys.exit(1)
             if config.get('debug', False):
                 print("Result:")
                 pprint.pprint(results)
