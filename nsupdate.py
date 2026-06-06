@@ -79,8 +79,7 @@ def getLocalIP():
         return None
 
 def getSLAACIPv6Addr():
-    # On Linux, 'ip -6 addr show' includes the 'temporary' flag so we can
-    # reliably pick the stable address and skip privacy-extension temporaries.
+    # Linux: 'ip -6 addr show' labels temporary privacy addresses with 'temporary'
     try:
         output = subprocess.check_output(
             ['ip', '-6', 'addr', 'show'], text=True, stderr=subprocess.DEVNULL
@@ -101,25 +100,32 @@ def getSLAACIPv6Addr():
                     return addr
             except ValueError:
                 continue
+        return None
+    except FileNotFoundError:
+        pass
+
+    # macOS: 'ifconfig' labels SLAAC addresses with 'autoconf' and temporary
+    # ones with 'autoconf temporary' — pick global autoconf without temporary
+    try:
+        output = subprocess.check_output(
+            ['ifconfig'], text=True, stderr=subprocess.DEVNULL
+        )
+        for line in output.splitlines():
+            line = line.strip()
+            if not line.startswith('inet6 '):
+                continue
+            parts = line.split()
+            if 'autoconf' not in parts or 'temporary' in parts:
+                continue
+            addr = parts[1].split('%')[0]
+            try:
+                if ipaddress.ip_address(addr).is_global:
+                    return addr
+            except ValueError:
+                continue
     except Exception:
         pass
 
-    # Fallback: netifaces EUI-64 matching (macOS / BSD where 'ip' isn't available)
-    for iface in netifaces.interfaces():
-        try:
-            addrs = netifaces.ifaddresses(iface)
-            if netifaces.AF_LINK not in addrs or netifaces.AF_INET6 not in addrs:
-                continue
-            mac = addrs[netifaces.AF_LINK][0]['addr'].lower().split(':')
-            if len(mac) != 6:
-                continue
-            part = f"{mac[3]}:{mac[4]}{mac[5]}"
-            for link in addrs[netifaces.AF_INET6]:
-                addr = link.get('addr', '').split('%')[0]
-                if part in addr and ipaddress.ip_address(addr).is_global:
-                    return addr
-        except Exception:
-            continue
     return None
 
 
