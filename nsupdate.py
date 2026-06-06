@@ -246,7 +246,8 @@ if __name__ == "__main__":
             ops = buildHttpOperations(config, ts_now, ip4_address, ip6_address)
             if config.get('debug', False):
                 print("Operations:")
-                pprint.pprint(ops)
+                for o in ops:
+                    print(o)
             try:
                 results = sendHttpUpdate(
                     ops,
@@ -262,7 +263,8 @@ if __name__ == "__main__":
                 sys.exit(1)
             if config.get('debug', False):
                 print("Result:")
-                pprint.pprint(results)
+                for r in results:
+                    print(r)
             for r in results:
                 if r.get('status') != 'ok':
                     print(f"DNS update failed for {r['name']} {r['type']}: {r.get('error', r.get('rcode', 'unknown'))}")
