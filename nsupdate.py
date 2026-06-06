@@ -110,19 +110,81 @@ def getConfig(config_path):
         print(f"{config_path} not found or invalid json file.")
         sys.exit(1)
 
-    min_config=('zone', 'zone_master', 'host', 'tsigkeyring')
-    for c in min_config:
-        if c not in list(config.keys()):
-            print(("Missing %s option in the config file." % (c,)))
-            sys.exit(1)
-        if c == "tsigkeyring":
-            tsigkeyring_keys = ('name', 'secret', 'keyalgorithm')
-            for c_ in tsigkeyring_keys:
-                if c_ not in list(config[c].keys()):
-                    print(("Missing %s option in the config file (tsigkeyring section)." % (c_,)))
-                    sys.exit(1)
+    if 'endpoint' in config or 'bearer_token' in config:
+        http_required = ('zone', 'host', 'endpoint', 'bearer_token')
+        for c in http_required:
+            if c not in config:
+                print(f"Missing {c} option in the config file.")
+                sys.exit(1)
+    else:
+        min_config = ('zone', 'zone_master', 'host', 'tsigkeyring')
+        for c in min_config:
+            if c not in list(config.keys()):
+                print(("Missing %s option in the config file." % (c,)))
+                sys.exit(1)
+            if c == "tsigkeyring":
+                tsigkeyring_keys = ('name', 'secret', 'keyalgorithm')
+                for c_ in tsigkeyring_keys:
+                    if c_ not in list(config[c].keys()):
+                        print(("Missing %s option in the config file (tsigkeyring section)." % (c_,)))
+                        sys.exit(1)
 
     return config
+
+
+def buildHttpOperations(config, ts_now, ip4_address, ip6_address):
+    ops = []
+    zone = config.get('zone')
+    host = config.get('host')
+    fqdn = f"{host}.{zone}"
+    ttl = 60
+
+    ops.append({"name": fqdn, "type": "TXT", "action": "replace", "value": f"Updated on: {ts_now}", "ttl": ttl})
+
+    if ip4_address:
+        ops.append({"name": fqdn, "type": "A", "action": "replace", "value": ip4_address, "ttl": ttl})
+    else:
+        ops.append({"name": fqdn, "type": "A", "action": "delete"})
+
+    if ip6_address:
+        ops.append({"name": fqdn, "type": "AAAA", "action": "replace", "value": ip6_address, "ttl": ttl})
+    else:
+        ops.append({"name": fqdn, "type": "AAAA", "action": "delete"})
+
+    local_fqdn = f"{host}-local.{zone}"
+    if config.get('has_local', False):
+        ip_local = getLocalIP()
+        if ip_local:
+            ops.append({"name": local_fqdn, "type": "A", "action": "replace", "value": ip_local, "ttl": ttl})
+        else:
+            ops.append({"name": local_fqdn, "type": "A", "action": "delete"})
+    else:
+        ops.append({"name": local_fqdn, "type": "A", "action": "delete"})
+
+    wa_fqdn = f"{host}-wa.{zone}"
+    if config.get('has_bonjour', False):
+        ip_bonjour = getBonjourIP()
+        if ip_bonjour:
+            ops.append({"name": wa_fqdn, "type": "AAAA", "action": "replace", "value": ip_bonjour, "ttl": ttl})
+        else:
+            ops.append({"name": wa_fqdn, "type": "AAAA", "action": "delete"})
+    else:
+        ops.append({"name": wa_fqdn, "type": "AAAA", "action": "delete"})
+
+    for alt in config.get('alt_names', []):
+        ops.append({"name": f"{alt}-txt.{zone}", "type": "TXT", "action": "replace", "value": f"Updated: {ts_now}", "ttl": ttl})
+        ops.append({"name": f"{alt}.{zone}", "type": "CNAME", "action": "replace", "value": f"{fqdn}.", "ttl": ttl})
+
+    return ops
+
+
+def sendHttpUpdate(operations, endpoint, token, timeout=URLLIB_TIMEOUT):
+    data = json.dumps(operations).encode('utf-8')
+    req = urllib.request.Request(endpoint, data=data, method='POST')
+    req.add_header('Authorization', f'Bearer {token}')
+    req.add_header('Content-Type', 'application/json')
+    res = urllib.request.urlopen(req, timeout=timeout)
+    return json.loads(res.read())
 
 
 if __name__ == "__main__":
@@ -153,6 +215,8 @@ if __name__ == "__main__":
             if config_.get('tsigkeyring'):
                 if config['tsigkeyring'].get('secret', None):
                     config_['tsigkeyring']['secret'] = "redacted"
+            if config_.get('bearer_token'):
+                config_['bearer_token'] = "redacted"
 
             pprint.pprint(config_, indent=4)
 
@@ -181,78 +245,99 @@ if __name__ == "__main__":
 
         ts_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
 
-        keyring = dns.tsigkeyring.from_text({
-            tsigkeyring["name"] : tsigkeyring["secret"]
-        })
+        use_http = 'endpoint' in config and 'bearer_token' in config
 
-        keyalgorithm = dns.tsig.default_algorithm
-        if tsigkeyring["keyalgorithm"] == "hmac-sha256":
-            keyalgorithm = dns.tsig.HMAC_SHA256
-        elif tsigkeyring["keyalgorithm"] == "hmac-sha512":
-            keyalgorithm = dns.tsig.HMAC_SHA512
-        elif tsigkeyring["keyalgorithm"] == "hmac-md5":
-            keyalgorithm = dns.tsig.HMAC_MD5
-
-        updater = dns.update.UpdateMessage(zone,
-                                           keyring=keyring,
-                                           keyname=tsigkeyring["name"],
-                                           keyalgorithm=keyalgorithm)
-
-        zone_master = ""
-        if dns.inet.is_address(config['zone_master']):
-            zone_master = config['zone_master']
+        if use_http:
+            ops = buildHttpOperations(config, ts_now, ip4_address, ip6_address)
+            if config.get('debug', False):
+                print("Operations:")
+                pprint.pprint(ops)
+            results = sendHttpUpdate(
+                ops,
+                config['endpoint'],
+                config['bearer_token'],
+                config.get('urllib_timeout', URLLIB_TIMEOUT)
+            )
+            if config.get('debug', False):
+                print("Result:")
+                pprint.pprint(results)
+            for r in results:
+                if r.get('status') != 'ok':
+                    print(f"DNS update failed for {r['name']} {r['type']}: {r.get('error', r.get('rcode', 'unknown'))}")
+                    sys.exit(1)
         else:
-            zone_master = str(dns.resolver.resolve(config['zone_master'], 'A')[0])
+            keyring = dns.tsigkeyring.from_text({
+                tsigkeyring["name"] : tsigkeyring["secret"]
+            })
 
-        updater.delete(host, "TXT")
-        updater.add(host, 60, "TXT", f"\"Updated on: {ts_now}\"")
+            keyalgorithm = dns.tsig.default_algorithm
+            if tsigkeyring["keyalgorithm"] == "hmac-sha256":
+                keyalgorithm = dns.tsig.HMAC_SHA256
+            elif tsigkeyring["keyalgorithm"] == "hmac-sha512":
+                keyalgorithm = dns.tsig.HMAC_SHA512
+            elif tsigkeyring["keyalgorithm"] == "hmac-md5":
+                keyalgorithm = dns.tsig.HMAC_MD5
 
-        updater.delete(host, "A")
-        if ip4_address:
-            updater.add(host, 60, "A", ip4_address)
+            updater = dns.update.UpdateMessage(zone,
+                                               keyring=keyring,
+                                               keyname=tsigkeyring["name"],
+                                               keyalgorithm=keyalgorithm)
 
-        updater.delete(host, "AAAA")
-        if ip6_address:
-            updater.add(host, 60, "AAAA", ip6_address)
+            zone_master = ""
+            if dns.inet.is_address(config['zone_master']):
+                zone_master = config['zone_master']
+            else:
+                zone_master = str(dns.resolver.resolve(config['zone_master'], 'A')[0])
 
-        updater.delete(f"{host}-local", "A")
-        if config.get('has_local', False):
-            ip_local = getLocalIP()
-            if ip_local != None and ip_local != "":
-                updater.add(f"{host}-local", 60, "A", ip_local)
+            updater.delete(host, "TXT")
+            updater.add(host, 60, "TXT", f"\"Updated on: {ts_now}\"")
 
-        updater.delete(f"{host}-wa", "AAAA")
-        if config.get('has_bonjour', False):
-            ip_bonjour = getBonjourIP()
-            if ip_bonjour != None and ip_bonjour != "":
-                updater.add(f"{host}-wa", 60, "AAAA", ip_bonjour)
+            updater.delete(host, "A")
+            if ip4_address:
+                updater.add(host, 60, "A", ip4_address)
 
-        if config.get('alt_names'):
-            alt_names = config.get('alt_names', [])
+            updater.delete(host, "AAAA")
+            if ip6_address:
+                updater.add(host, 60, "AAAA", ip6_address)
 
-            for alt in alt_names:
-                updater.delete(f"{alt}-txt", "TXT")
-                updater.add(f"{alt}-txt", 60, "TXT", f"\"Updated: {ts_now}\"")
-                updater.delete(f"{alt}", "CNAME")
-                updater.add(f"{alt}", 60, "CNAME", f"{host}.{zone}.")
+            updater.delete(f"{host}-local", "A")
+            if config.get('has_local', False):
+                ip_local = getLocalIP()
+                if ip_local != None and ip_local != "":
+                    updater.add(f"{host}-local", 60, "A", ip_local)
 
-        if config.get('debug', False):
-            print("Changes:")
-            pprint.pprint(updater.sections)
+            updater.delete(f"{host}-wa", "AAAA")
+            if config.get('has_bonjour', False):
+                ip_bonjour = getBonjourIP()
+                if ip_bonjour != None and ip_bonjour != "":
+                    updater.add(f"{host}-wa", 60, "AAAA", ip_bonjour)
 
-        response = dns.query.tcp(
-            updater,
-            zone_master,
-            config.get('dnspython_timeout', DNSPYTHON_TIMEOUT)
-        )
+            if config.get('alt_names'):
+                alt_names = config.get('alt_names', [])
 
-        if config.get('debug', False):
-            print("Result:")
-            print(response)
+                for alt in alt_names:
+                    updater.delete(f"{alt}-txt", "TXT")
+                    updater.add(f"{alt}-txt", 60, "TXT", f"\"Updated: {ts_now}\"")
+                    updater.delete(f"{alt}", "CNAME")
+                    updater.add(f"{alt}", 60, "CNAME", f"{host}.{zone}.")
 
-        if response.rcode() != dns.rcode.NOERROR:
-            print(f"DNS update failed: {dns.rcode.to_text(response.rcode())}")
-            sys.exit(1)
+            if config.get('debug', False):
+                print("Changes:")
+                pprint.pprint(updater.sections)
+
+            response = dns.query.tcp(
+                updater,
+                zone_master,
+                config.get('dnspython_timeout', DNSPYTHON_TIMEOUT)
+            )
+
+            if config.get('debug', False):
+                print("Result:")
+                print(response)
+
+            if response.rcode() != dns.rcode.NOERROR:
+                print(f"DNS update failed: {dns.rcode.to_text(response.rcode())}")
+                sys.exit(1)
 
     finally:
         fcntl.lockf(fp, fcntl.LOCK_UN)

@@ -1,28 +1,47 @@
 # dyndns
-Dynamically update your host DNS name via rfc2136.
+Dynamically update your host DNS records, either via an HTTP endpoint or RFC 2136.
 
 ## Requirements
-* A DNS server configured to accept dynamic DNS updates.
-* A configured zone and key authorized to update that zone.
 * Python 3.6 or greater.
-* DNSPython.
+* For **HTTP mode**: an HTTP endpoint that accepts the JSON update protocol (e.g. `https://dyndns.limau.net/update`).
+* For **RFC 2136 mode**: a DNS server configured to accept dynamic updates, a configured zone, and an authorized TSIG key. Requires DNSPython and netifaces.
 
 ## Configuration file
-The config file is just a JSON file named config.json.
-### Configuration file definition
+
+The config file is a JSON file (conventionally `config.json`). The update mode is selected automatically based on which keys are present:
+
+* If `endpoint` and `bearer_token` are present → **HTTP mode**
+* Otherwise → **RFC 2136 mode**
+
+See `config.example.json` (HTTP) and `examples/config.json` (RFC 2136) for starter templates.
+
+### Common options
+
 | key | type | description |
 |-----|------|-------------|
-| `zone_master` | string | The primary DNS server you will be sending the update to. |
-| `zone` | string | The zone name you will be updating. |
-| `host` | string | The primary record name to set or update. |
-| `tsigkeyring` | dict | Required fields are `name`, `secret`, and `keyalgorithm` matching the host key and secret. Valid values for `keyalgorithm` are `hmac-md5`, `hmac-sha256`, or `hmac-sha512` |
-| `alt_names` | array | (Optional) list of other names you want to be associated with. |
-| `has_bonjour` | boolean | (Optional, default: `false`) Update the bonjour host entry. |
-| `has_local` | boolean | (Optional, default: `false`) Update the local host entry. This is typically the $hostname-local address. |
-| `debug` | boolean | (Optional, default: `false`) Set to `true` to see what gets passed to nsupdate. |
-| `urllib_timeout` | int | (Optional, default: `10`) Set the urllib request timeout in seconds. |
-| `dnspython_timeout` | int | (Optional, default: `10`) Set the dnspython request timeout in seconds. |
-| `use_ipv6_slaac` | boolean | (Optional, default: `false`) For IPv6 addresses, try to use the stable SLAAC address instead of the public, privacy based address. |
+| `zone` | string | The zone name being updated, e.g. `home.example.com`. |
+| `host` | string | The primary record name to set or update, e.g. `myhost`. |
+| `alt_names` | array | (Optional) list of other names to alias to this host via CNAME. |
+| `has_bonjour` | boolean | (Optional, default: `false`) Update the `host-wa` AAAA record with the local Bonjour/utun0 address. |
+| `has_local` | boolean | (Optional, default: `false`) Update the `host-local` A record with the LAN address. |
+| `use_ipv6_slaac` | boolean | (Optional, default: `false`) Prefer the stable SLAAC address for IPv6 over the public privacy address. |
+| `debug` | boolean | (Optional, default: `false`) Print config, operations, and responses at runtime. |
+| `urllib_timeout` | int | (Optional, default: `10`) HTTP request timeout in seconds. |
+
+### HTTP mode options
+
+| key | type | description |
+|-----|------|-------------|
+| `endpoint` | string | The HTTPS update endpoint URL, e.g. `https://dyndns.limau.net/update`. |
+| `bearer_token` | string | Bearer token for authorization. |
+
+### RFC 2136 mode options
+
+| key | type | description |
+|-----|------|-------------|
+| `zone_master` | string | The primary DNS server to send updates to (hostname or IP). |
+| `tsigkeyring` | dict | Required fields: `name`, `secret`, and `keyalgorithm`. Valid algorithms: `hmac-md5`, `hmac-sha256`, `hmac-sha512`. |
+| `dnspython_timeout` | int | (Optional, default: `10`) DNS TCP timeout in seconds. |
 
 ## Usage
 ```

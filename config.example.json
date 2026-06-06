@@ -1,0 +1,11 @@
+{
+  "endpoint": "https://dyndns.limau.net/update",
+  "bearer_token": "your-bearer-token",
+  "zone": "home.example.com",
+  "host": "myhost",
+  "alt_names": [],
+  "has_bonjour": false,
+  "has_local": false,
+  "use_ipv6_slaac": false,
+  "debug": false
+}
