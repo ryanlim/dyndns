@@ -79,6 +79,32 @@ def getLocalIP():
         return None
 
 def getSLAACIPv6Addr():
+    # On Linux, 'ip -6 addr show' includes the 'temporary' flag so we can
+    # reliably pick the stable address and skip privacy-extension temporaries.
+    try:
+        output = subprocess.check_output(
+            ['ip', '-6', 'addr', 'show'], text=True, stderr=subprocess.DEVNULL
+        )
+        for line in output.splitlines():
+            line = line.strip()
+            if not line.startswith('inet6 '):
+                continue
+            parts = line.split()
+            # inet6 <addr>/<prefix> scope <scope> [flags...]
+            if len(parts) < 4 or parts[2] != 'scope' or parts[3] != 'global':
+                continue
+            if 'temporary' in parts:
+                continue
+            addr = parts[1].split('/')[0]
+            try:
+                if ipaddress.ip_address(addr).is_global:
+                    return addr
+            except ValueError:
+                continue
+    except Exception:
+        pass
+
+    # Fallback: netifaces EUI-64 matching (macOS / BSD where 'ip' isn't available)
     for iface in netifaces.interfaces():
         try:
             addrs = netifaces.ifaddresses(iface)
